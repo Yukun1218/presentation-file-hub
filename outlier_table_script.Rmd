@@ -1,0 +1,71 @@
+---
+output: html_document
+runtime: shiny_prerendered
+---
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, cache= FALSE}
+library(rhandsontable)
+library(tidyverse)
+library(shiny)
+library(shinyWidgets)
+
+rHandsontableOutput('hot') 
+actionButton('saveBtn', 'Save Change')
+```
+
+```{r, context="server"}
+
+fname <- 'edited'
+values <- list() 
+setHot <- function(x) values[["hot"]] <<- x 
+
+observeEvent( 
+    input$saveBtn, # update csv file each time the button is pressed
+    {if (!is.null(values[["hot"]])) { # if there's a table input
+      # write.csv(values[["hot"]], fname) # overwrite the temporary database file
+      write.csv(x = values[["hot"]], file = paste0(fname, ".csv"), row.names = FALSE) # overwrite the csv
+    }
+  })
+
+
+observeEvent(input$saveBtn, {
+      showNotification("Good job!", 'Your input is recorded.',type = 'message')
+    })
+
+
+output$hot <- renderRHandsontable({
+ if (!is.null(input$hot)) { # if there is an rhot user input...
+      DF <- hot_to_r(input$hot) # convert rhandsontable data to R object and store in data frame
+      setHot(DF) # set the rhandsontable values
+      
+    } else {
+
+      DF <- readRDS('./input/cache/outliers/2019-03-22outliers_all.RDS')
+      
+      DF <- DF %>%
+        as.data.frame() %>%
+        # filter(user_id == 'wb225846') %>% 
+        # filter(user_id == input$user_upi) %>%
+        rename(country = country_name,
+               user = user_id,
+               `value updated` = value_updated) %>%
+        mutate(year = lubridate::year(as.Date(as.character(year), format = "%Y-%m-%d"))) %>%
+        mutate(`Is Outlier` = TRUE) %>%
+        mutate(`comment` = 'No Comment') 
+      
+      setHot(DF) # set the rhandsontable values
+    }
+    
+    rhandsontable(DF,width = 900,height = 450) %>% # actual rhandsontable object
+      hot_table(highlightCol = TRUE, highlightRow = TRUE) %>%
+      hot_col("series", readOnly = TRUE) %>%
+      hot_col("user", readOnly = TRUE) %>%
+      hot_col("country", readOnly = TRUE) %>%
+      hot_col("year", readOnly = TRUE) %>%
+      hot_col("value updated", readOnly = TRUE) %>%
+      hot_col("database", readOnly = TRUE) %>%
+      hot_col("year", format = "0") %>%
+      hot_cols(fixedColumnsLeft = 1) %>%
+      hot_rows(fixedRowsTop = 0)
+  })
+```
